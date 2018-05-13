@@ -2,7 +2,6 @@ package stub
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -41,7 +40,6 @@ func (h *Handler) Handle(ctx types.Context, event types.Event) error {
 
 		// Create the statefulset if it doesn't exist
 		statefulset := statefulsetForMongo(mongo)
-		log.Printf("creating stateful set: %s with %d replicas...", mongo.Name, mongo.Spec.Replicas)
 
 		err := action.Create(statefulset)
 		if err != nil && !apierrors.IsAlreadyExists(err) {
@@ -78,7 +76,15 @@ func (h *Handler) Handle(ctx types.Context, event types.Event) error {
 				return fmt.Errorf("failed to update mongo status: %v", err)
 			}
 		}
+
+		// create service
+		service := serviceForMongo(mongo)
+		err = action.Create(service)
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("failed to create service: %v", err)
+		}
 	}
+
 	return nil
 }
 

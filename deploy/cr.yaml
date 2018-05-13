@@ -3,4 +3,4 @@ kind: "MongoService"
 metadata:
   name: "mongocluster"
 spec:
-  replicas: 5
+  replicas: 3
