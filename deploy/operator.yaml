@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: mongodb-operator
+  template:
+    metadata:
+      labels:
+        name: mongodb-operator
+    spec:
+      containers:
+        - name: mongodb-operator
+          image: saada/mongodb-operator
+          command:
+          - mongodb-operator
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

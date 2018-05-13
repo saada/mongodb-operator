@@ -1,0 +1,3 @@
+apiVersion: saada.mongodb.operator/v1alpha1
+kind: MongoService
+projectName: mongodb-operator

@@ -1,0 +1,6 @@
+apiVersion: "saada.mongodb.operator/v1alpha1"
+kind: "MongoService"
+metadata:
+  name: "mongocluster"
+spec:
+  replicas: 5
