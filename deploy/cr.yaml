@@ -1,6 +1,6 @@
 apiVersion: "saada.mongodb.operator/v1alpha1"
 kind: "MongoService"
 metadata:
-  name: "mongocluster"
+  name: "MyMongoReplicasetCluster"
 spec:
   replicas: 3

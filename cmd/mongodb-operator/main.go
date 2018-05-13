@@ -4,10 +4,10 @@ import (
 	"context"
 	"runtime"
 
-	stub "github.com/saada/mongodb-operator/pkg/stub"
 	sdk "github.com/operator-framework/operator-sdk/pkg/sdk"
 	k8sutil "github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
+	stub "github.com/saada/mongodb-operator/pkg/stub"
 
 	"github.com/sirupsen/logrus"
 )

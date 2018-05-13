@@ -1,10 +1,15 @@
 package stub
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
 
 	"github.com/saada/mongodb-operator/pkg/apis/saada/v1alpha1"
 
@@ -17,6 +22,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 func NewHandler() handler.Handler {
@@ -46,14 +52,14 @@ func (h *Handler) Handle(ctx types.Context, event types.Event) error {
 			return fmt.Errorf("failed to create statefulset: %v", err)
 		}
 
-		// Ensure the statefulset size is the same as the spec
+		// Ensure the statefulset replicas is the same as the spec
 		err = query.Get(statefulset)
 		if err != nil {
 			return fmt.Errorf("failed to get statefulset: %v", err)
 		}
-		size := mongo.Spec.Replicas
-		if *statefulset.Spec.Replicas != size {
-			statefulset.Spec.Replicas = &size
+		replicas := mongo.Spec.Replicas
+		if *statefulset.Spec.Replicas != replicas {
+			statefulset.Spec.Replicas = &replicas
 			err = action.Update(statefulset)
 			if err != nil {
 				return fmt.Errorf("failed to update statefulset: %v", err)
@@ -82,6 +88,21 @@ func (h *Handler) Handle(ctx types.Context, event types.Event) error {
 		err = action.Create(service)
 		if err != nil && !apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create service: %v", err)
+		}
+
+		// setup replicaset
+		if replicas > 1 {
+			var errs []string
+			cmd := "/usr/bin/mongo --eval 'printjson(db.serverStatus())'"
+			for _, pod := range podList.Items {
+				err := execCommandInContainer(pod, cmd)
+				if err != nil {
+					errs = append(errs, fmt.Sprintf("Failed to exec command in container: %v", err))
+				}
+			}
+			if len(errs) > 0 {
+				return fmt.Errorf("%v", strings.Join(errs, "\n"))
+			}
 		}
 	}
 
@@ -218,16 +239,48 @@ func getPodNames(pods []v1.Pod) []string {
 	return podNames
 }
 
-// func execCommandInContainer() {
-// 	f.ExecWithOptions(ExecOptions{
-// 		Command:       cmd,
-// 		Namespace:     f.Namespace.Name,
-// 		PodName:       podName,
-// 		ContainerName: containerName,
+func execCommandInContainer(pod v1.Pod, cmd ...string) error {
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get kubeconfig: %v", err)
+	}
+	client, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to get kubeconfig: %v", err)
+	}
+	req := client.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.Namespace).
+		SubResource("exec")
+	req.VersionedParams(&v1.PodExecOptions{
+		Container: pod.Spec.Containers[0].Name,
+		Command:   cmd,
+		Stdout:    true,
+		Stderr:    true,
+	}, scheme.ParameterCodec)
 
-// 		Stdin:              nil,
-// 		CaptureStdout:      true,
-// 		CaptureStderr:      true,
-// 		PreserveWhitespace: false,
-// 	})
-// }
+	exec, err := remotecommand.NewSPDYExecutor(cfg, "POST", req.URL())
+	if err != nil {
+		return fmt.Errorf("failed to exec: %v", err)
+	}
+
+	var (
+		stdOut bytes.Buffer
+		stdErr bytes.Buffer
+	)
+
+	err = exec.Stream(remotecommand.StreamOptions{
+		Stdout: &stdOut,
+		Stderr: &stdErr,
+	})
+
+	fmt.Printf("pod name: %s container name: %s\n", pod.Name, pod.Spec.Containers[0].Name)
+	fmt.Printf("stdout: %s\n", stdOut.String())
+	fmt.Printf("stderr: %s\n", stdErr.String())
+	if err != nil {
+		return fmt.Errorf("could not execute: %v", err)
+	}
+
+	return nil
+}
